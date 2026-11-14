@@ -1,0 +1,33 @@
+appId: com.controlstock.pos.offline
+productName: Control de Stock POS
+copyright: Copyright © 2026 Control Stock POS
+npmRebuild: false
+directories:
+  output: dist
+files:
+  - src/**/*
+  - package.json
+  - "!Control_de_Stock.html"
+  - "!tests/**"
+win:
+  target:
+    - target: portable
+      arch:
+        - x64
+    - target: nsis
+      arch:
+        - x64
+portable:
+  artifactName: "Control_de_Stock_POS_${version}_Portable.${ext}"
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+mac:
+  target:
+    - dmg
+  category: public.app-category.business
+asar: true
+asarUnpack:
+  - "**/better-sqlite3/**"

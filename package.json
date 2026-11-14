@@ -1,0 +1,28 @@
+{
+  "name": "control-stock-pos",
+  "version": "1.0.0",
+  "description": "Sistema POS de Mostrador y Control de Stock 100% Offline",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "node -e \"const{spawn}=require('child_process');const electron=require('electron');const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;spawn(electron,['.'],{stdio:'inherit',env}).on('exit',c=>process.exit(c??0));\"",
+    "test": "node -e \"const{spawn}=require('child_process');const electron=require('electron');const env={...process.env,ELECTRON_RUN_AS_NODE:'1'};spawn(electron,['tests/verify-pos.js'],{stdio:'inherit',env}).on('exit',c=>process.exit(c??0));\"",
+    "pack": "node -e \"const{spawn}=require('child_process');const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;spawn('npx',['electron-builder','--dir'],{stdio:'inherit',shell:true,env}).on('exit',c=>process.exit(c??0));\"",
+    "dist": "node -e \"const{spawn}=require('child_process');const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;spawn('npx',['electron-builder','--win','portable'],{stdio:'inherit',shell:true,env}).on('exit',c=>process.exit(c??0));\""
+  },
+  "keywords": [
+    "pos",
+    "inventory",
+    "electron",
+    "sqlite",
+    "offline"
+  ],
+  "author": "Control Stock POS",
+  "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^13.2.0"
+  },
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0"
+  }
+}
