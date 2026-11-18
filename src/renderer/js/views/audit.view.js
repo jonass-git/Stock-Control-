@@ -52,17 +52,19 @@
 
         return `
           <tr>
-            <td><strong>${escapeHtml(s.ticket_number)}</strong></td>
-            <td style="font-size:0.83rem;">${escapeHtml(formatDateTime(s.created_at))}</td>
-            <td>
-              <strong>${escapeHtml(s.worker_name)}</strong>
-              <div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtml(s.worker_code)}</div>
+            <td data-label="Ticket"><strong>${escapeHtml(s.ticket_number)}</strong></td>
+            <td data-label="Fecha / Hora" style="font-size:0.83rem;">${escapeHtml(formatDateTime(s.created_at))}</td>
+            <td data-label="Trabajador">
+              <div>
+                <strong>${escapeHtml(s.worker_name)}</strong>
+                <div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtml(s.worker_code)}</div>
+              </div>
             </td>
-            <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(summary)}">${escapeHtml(summary)}</td>
-            <td>${escapeHtml(paymentLabel(s.payment_method))}</td>
-            <td><strong>${formatCurrency(s.total_amount)}</strong></td>
-            <td>${statusBadge}</td>
-            <td>
+            <td data-label="Artículos" class="td-truncate" title="${escapeHtml(summary)}">${escapeHtml(summary)}</td>
+            <td data-label="Pago">${escapeHtml(paymentLabel(s.payment_method))}</td>
+            <td data-label="Total"><strong>${formatCurrency(s.total_amount)}</strong></td>
+            <td data-label="Estado">${statusBadge}</td>
+            <td data-label="Acciones">
               <div class="row-actions">
                 <button type="button" class="btn btn-outline btn-sm" data-audit-sale="receipt" data-id="${s.id}">Ticket</button>
                 ${s.status === 'completed'
@@ -99,21 +101,25 @@
         const deltaCls = m.quantity_delta > 0 ? 'delta-pos' : m.quantity_delta < 0 ? 'delta-neg' : '';
         return `
           <tr>
-            <td style="font-size:0.82rem;white-space:nowrap;">${escapeHtml(formatDateTime(m.created_at))}</td>
-            <td>
-              <div class="prod-title" style="font-size:0.88rem;">${escapeHtml(m.product_name)}</div>
-              <div class="prod-meta">${m.product_sku ? `SKU: ${escapeHtml(m.product_sku)}` : ''}</div>
+            <td data-label="Fecha / Hora" style="font-size:0.82rem;white-space:nowrap;">${escapeHtml(formatDateTime(m.created_at))}</td>
+            <td data-label="Producto">
+              <div>
+                <div class="prod-title" style="font-size:0.88rem;">${escapeHtml(m.product_name)}</div>
+                <div class="prod-meta">${m.product_sku ? `SKU: ${escapeHtml(m.product_sku)}` : ''}</div>
+              </div>
             </td>
-            <td><span class="badge ${badge.cls}">${badge.label}</span></td>
-            <td>${formatNumber(m.previous_stock)}</td>
-            <td class="${deltaCls}">${escapeHtml(deltaStr)}</td>
-            <td><strong>${formatNumber(m.new_stock)}</strong></td>
-            <td>
-              <strong>${escapeHtml(m.worker_name)}</strong>
-              <div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtml(m.worker_code)}</div>
+            <td data-label="Tipo"><span class="badge ${badge.cls}">${badge.label}</span></td>
+            <td data-label="Anterior">${formatNumber(m.previous_stock)}</td>
+            <td data-label="Variación" class="${deltaCls}">${escapeHtml(deltaStr)}</td>
+            <td data-label="Nuevo"><strong>${formatNumber(m.new_stock)}</strong></td>
+            <td data-label="Trabajador">
+              <div>
+                <strong>${escapeHtml(m.worker_name)}</strong>
+                <div style="font-size:0.74rem;color:var(--text-muted);">${escapeHtml(m.worker_code)}</div>
+              </div>
             </td>
-            <td style="font-size:0.82rem;color:var(--text-muted);">
-              ${m.ticket_number ? `<strong>${escapeHtml(m.ticket_number)}</strong> · ` : ''}${escapeHtml(m.reason || '—')}
+            <td data-label="Motivo / Ticket" style="font-size:0.82rem;color:var(--text-muted);">
+              <span>${m.ticket_number ? `<strong>${escapeHtml(m.ticket_number)}</strong> · ` : ''}${escapeHtml(m.reason || '—')}</span>
             </td>
           </tr>
         `;

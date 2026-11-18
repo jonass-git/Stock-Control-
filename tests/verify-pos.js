@@ -7,6 +7,8 @@ const { initDatabase, getDb, closeDatabase } = require('../src/main/db/connectio
 const { createIpcHandlers } = require('../src/main/ipc');
 const backupService = require('../src/main/backup');
 const session = require('../src/main/session');
+const { generateQrSvg } = require('../src/main/qr');
+const { startLanServer } = require('../src/main/lan-server');
 
 async function expectErrorStatus(fn, expectedStatus, label) {
   let caught = null;
@@ -224,9 +226,153 @@ async function runTests() {
     assert.ok(fs.existsSync(backupOutPath), 'El archivo .db de respaldo debe existir.');
     backupService.validateBackupFile(backupOutPath);
 
+    console.log('7. Verificando generador QR SVG y servidor HTTP LAN / RBAC móvil...');
+    const qrSvg = generateQrSvg('http://192.168.1.50:3847');
+    assert.ok(qrSvg.includes('<svg') && (qrSvg.includes('<rect') || qrSvg.includes('<path')), 'QR SVG inválido.');
+
+    const lanServer = await startLanServer({
+      handlers,
+      getDb,
+      port: 0,
+      host: '0.0.0.0'
+    });
+
+    try {
+      const baseUrl = `http://127.0.0.1:${lanServer.port}`;
+
+      const lanInfoRes = await fetch(`${baseUrl}/api/lan-info`);
+      assert.equal(lanInfoRes.status, 200);
+      assert.equal(lanInfoRes.headers.get('access-control-allow-origin'), '*');
+      const lanInfoJson = await lanInfoRes.json();
+      assert.equal(lanInfoJson.ok, true);
+      assert.equal(lanInfoJson.data.port, lanServer.port);
+      assert.equal(lanInfoJson.data.status, 'online');
+      assert.equal(lanInfoJson.data.host, '0.0.0.0');
+      assert.ok(Array.isArray(lanInfoJson.data.interfaces));
+      assert.ok(typeof lanInfoJson.data.primaryUrl === 'string' && lanInfoJson.data.primaryUrl.startsWith('http://'));
+      for (const iface of lanInfoJson.data.interfaces) {
+        assert.ok(iface.url && iface.url.includes(iface.ip), 'Cada interfaz debe incluir su URL.');
+        assert.ok(typeof iface.qrSvg === 'string' && iface.qrSvg.includes('<svg'), 'Cada interfaz debe incluir QR SVG.');
+      }
+      const hotspotIndex = lanInfoJson.data.interfaces.findIndex((i) => i.ip && i.ip.startsWith('192.168.137.'));
+      const activeIndex = lanInfoJson.data.interfaces.findIndex((i) => i.isRouted && !i.isHotspot);
+      if (hotspotIndex !== -1 && activeIndex !== -1) {
+        assert.ok(activeIndex < hotspotIndex, 'La interfaz de red activa debe priorizarse antes que 192.168.137.x.');
+      }
+
+      const corsPreflight = await fetch(`${baseUrl}/api/rpc`, { method: 'OPTIONS' });
+      assert.equal(corsPreflight.status, 204);
+      assert.equal(corsPreflight.headers.get('access-control-allow-origin'), '*');
+
+      const indexRes = await fetch(`${baseUrl}/`);
+      assert.equal(indexRes.status, 200);
+      assert.equal(indexRes.headers.get('access-control-allow-origin'), '*');
+      const cssRes = await fetch(`${baseUrl}/assets/css/styles.css`);
+      assert.equal(cssRes.status, 200);
+
+      const manifestRes = await fetch(`${baseUrl}/manifest.json`);
+      assert.equal(manifestRes.status, 200);
+      const swRes = await fetch(`${baseUrl}/sw.js`);
+      assert.equal(swRes.status, 200);
+      assert.equal(swRes.headers.get('service-worker-allowed'), '/');
+
+      // Aislamiento de sesión móvil frente a sesión desktop activa (admin)
+      const unauthRpcRes = await fetch(`${baseUrl}/api/rpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'products:list', args: [] })
+      });
+      assert.equal(unauthRpcRes.status, 401, 'RPC móvil sin Bearer token debe devolver 401 incluso con admin activo en desktop.');
+
+      // Login remoto como vendedor sin alterar sesión desktop admin
+      const sellerLoginRes = await fetch(`${baseUrl}/api/rpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: 'auth:login',
+          args: [{ workerId: newSeller.id, credential: '5678' }]
+        })
+      });
+      assert.equal(sellerLoginRes.status, 200);
+      const sellerLoginJson = await sellerLoginRes.json();
+      assert.equal(sellerLoginJson.ok, true);
+      assert.equal(sellerLoginJson.data.role, 'seller');
+      assert.equal(typeof sellerLoginJson.data.token, 'string');
+      assert.ok(sellerLoginJson.data.token.length > 10);
+      const sellerToken = sellerLoginJson.data.token;
+
+      assert.equal(session.getSession().role, 'admin', 'La sesión de escritorio debe permanecer intacta tras login móvil.');
+
+      // Venta remota como vendedor -> descuenta stock en SQLite y registra worker_id correcto
+      const mobileSaleRes = await fetch(`${baseUrl}/api/rpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sellerToken}`
+        },
+        body: JSON.stringify({
+          channel: 'sales:create',
+          args: [{ items: [{ product_id: mouse.id, quantity: 1 }], payment_method: 'card' }]
+        })
+      });
+      assert.equal(mobileSaleRes.status, 200);
+      const mobileSaleJson = await mobileSaleRes.json();
+      assert.equal(mobileSaleJson.ok, true);
+      assert.equal(mobileSaleJson.data.worker_id, newSeller.id);
+
+      const prodsAfterMobileSale = await handlers['products:list']();
+      assert.equal(
+        prodsAfterMobileSale.find((p) => p.id === mouse.id).stock,
+        initialMouseStock - 1,
+        'La venta móvil debe descontar stock en tiempo real sobre SQLite.'
+      );
+
+      // Bloqueo RBAC (403) en móvil para vendedor
+      const forbiddenCreateRes = await fetch(`${baseUrl}/api/rpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${sellerToken}`
+        },
+        body: JSON.stringify({
+          channel: 'products:create',
+          args: [{ name: 'Bloqueado Móvil', stock: 1, price: 5 }]
+        })
+      });
+      assert.equal(forbiddenCreateRes.status, 403);
+
+      const forbiddenBackupRes = await fetch(`${baseUrl}/api/backup/db`, {
+        headers: { Authorization: `Bearer ${sellerToken}` }
+      });
+      assert.equal(forbiddenBackupRes.status, 403);
+
+      // Login remoto como admin -> descarga copia SQLite válida
+      const adminLoginRes = await fetch(`${baseUrl}/api/rpc`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: 'auth:login',
+          args: [{ workerId: adminProfile.id, credential: '1234' }]
+        })
+      });
+      assert.equal(adminLoginRes.status, 200);
+      const adminLoginJson = await adminLoginRes.json();
+      const adminToken = adminLoginJson.data.token;
+      assert.ok(adminToken);
+
+      const adminBackupRes = await fetch(`${baseUrl}/api/backup/db`, {
+        headers: { Authorization: `Bearer ${adminToken}` }
+      });
+      assert.equal(adminBackupRes.status, 200);
+      const backupBuf = Buffer.from(await adminBackupRes.arrayBuffer());
+      assert.ok(backupBuf.subarray(0, 15).toString('utf8') === 'SQLite format 3', 'Backup móvil debe ser un archivo SQLite válido.');
+    } finally {
+      await lanServer.close();
+    }
+
     console.log('TODAS LAS PRUEBAS DE INTEGRACIÓN PASARON CORRECTAMENTE.');
   } finally {
-    session.clearSession();
+    session.clearAllSessions();
     closeDatabase();
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

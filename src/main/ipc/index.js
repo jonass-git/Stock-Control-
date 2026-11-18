@@ -6,8 +6,18 @@ const salesRepo = require('../db/repositories/sales.repo');
 const movementsRepo = require('../db/repositories/movements.repo');
 const defaultBackupService = require('../backup');
 
-function createIpcHandlers({ getDb, getMainWindow, backupService = defaultBackupService }) {
+function createIpcHandlers({ getDb, getMainWindow, backupService = defaultBackupService, getLanInfo = null }) {
   return {
+    // =========================================================================
+    // RED LOCAL MÓVIL (Público para mostrar IP / QR de conexión en tienda)
+    // =========================================================================
+    'lan:get-info': guardIpc('public', () => {
+      if (typeof getLanInfo === 'function') {
+        return getLanInfo();
+      }
+      return { port: 3847, ips: [], urls: [], primaryUrl: '', qrSvg: '' };
+    }),
+
     // =========================================================================
     // AUTENTICACIÓN Y TURNO (Público - Pantalla de Bloqueo)
     // =========================================================================
@@ -15,7 +25,7 @@ function createIpcHandlers({ getDb, getMainWindow, backupService = defaultBackup
       return workersRepo.listActiveForLogin(getDb());
     }),
 
-    'auth:login': guardIpc('public', (_session, payload) => {
+    'auth:login': guardIpc('public', (remoteCtx, payload) => {
       const workerId = Number(payload && payload.workerId);
       const credential = String((payload && payload.credential) || '');
       if (!workerId) {
@@ -25,15 +35,26 @@ function createIpcHandlers({ getDb, getMainWindow, backupService = defaultBackup
       if (!worker) {
         throw new Error('PIN o contraseña incorrectos.');
       }
+      if (remoteCtx && remoteCtx.isRemote) {
+        const created = session.createMobileSession(worker);
+        return { ...created.session, token: created.token };
+      }
       return session.setSession(worker);
     }),
 
-    'auth:get-session': guardIpc('public', () => {
+    'auth:get-session': guardIpc('public', (remoteCtx) => {
+      if (remoteCtx && remoteCtx.isRemote) {
+        return remoteCtx.session ? { ...remoteCtx.session } : null;
+      }
       return session.getSession();
     }),
 
-    'auth:logout': guardIpc('public', () => {
-      session.clearSession();
+    'auth:logout': guardIpc('public', (remoteCtx) => {
+      if (remoteCtx && remoteCtx.isRemote) {
+        session.deleteMobileSession(remoteCtx.token);
+      } else {
+        session.clearSession();
+      }
       return { loggedOut: true };
     }),
 
@@ -146,11 +167,19 @@ function createIpcHandlers({ getDb, getMainWindow, backupService = defaultBackup
     }),
 
     'backup:restore-db': guardIpc('admin', () => {
-      return backupService.restoreDatabaseBackup(getMainWindow ? getMainWindow() : null, session);
+      const win = getMainWindow ? getMainWindow() : null;
+      if (!win) {
+        throw new Error('La restauración de archivos .db debe hacerse desde el equipo principal.');
+      }
+      return backupService.restoreDatabaseBackup(win, session);
     }),
 
     'backup:save-file': guardIpc('admin', (_activeSession, payload) => {
-      return backupService.saveFileDialog(getMainWindow ? getMainWindow() : null, payload);
+      const win = getMainWindow ? getMainWindow() : null;
+      if (!win) {
+        throw new Error('Diálogo nativo no disponible fuera del escritorio.');
+      }
+      return backupService.saveFileDialog(win, payload);
     })
   };
 }

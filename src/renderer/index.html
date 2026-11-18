@@ -2,9 +2,17 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Stock POS" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';" />
   <title>Control de Stock &amp; POS — Mostrador Offline</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
   <link rel="stylesheet" href="assets/css/styles.css" />
 </head>
 <body>
@@ -29,14 +37,16 @@
               <p class="login-subtitle">Selecciona tu usuario para abrir turno en mostrador</p>
             </div>
           </div>
-          <span class="offline-pill">100% Offline</span>
+          <div class="login-brand-badges">
+            <button type="button" class="lan-pill-btn" id="btnLanInfoLogin" title="Conectar iPhone o Android en red Wi-Fi local">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              Conectar Móvil
+            </button>
+            <span class="offline-pill">100% Offline</span>
+          </div>
         </div>
 
         <div id="loginWorkersGrid" class="workers-select-grid"></div>
-
-        <p class="login-hint" id="loginDefaultHint">
-          Primer acceso por defecto: <strong>Administrador</strong> (PIN <code>1234</code>) · <strong>Vendedor Turno 1</strong> (PIN <code>0000</code>). Puedes modificar estas claves en el módulo de Trabajadores.
-        </p>
       </div>
 
       <form id="loginForm" class="login-pin-pane">
@@ -49,9 +59,9 @@
         </div>
 
         <div class="field">
-          <label for="loginCredentialInput" id="loginCredentialLabel">PIN numérico (4-6 dígitos)</label>
+          <label for="loginCredentialInput" id="loginCredentialLabel">Credencial de acceso</label>
           <div class="pin-input-wrap">
-            <input type="password" id="loginCredentialInput" class="pin-input" autocomplete="off" placeholder="••••" />
+            <input type="password" id="loginCredentialInput" class="pin-input" autocomplete="off" />
           </div>
         </div>
 
@@ -113,9 +123,16 @@
             </div>
           </div>
 
+          <button type="button" class="btn btn-outline btn-sm" id="btnLanInfo" title="Conectar iPhone / Android en red Wi-Fi local">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="7" y="2" width="10" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+            <span class="hide-xs">Móvil Wi-Fi</span>
+            <span class="show-xs">Wi-Fi</span>
+          </button>
+
           <button type="button" class="btn btn-warning-soft btn-sm" id="btnSwitchShift" title="Bloquear caja o cambiar trabajador (F12)">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-            Cambiar Turno (F12)
+            <span class="hide-xs">Cambiar Turno (F12)</span>
+            <span class="show-xs">Turno</span>
           </button>
 
           <button type="button" class="btn btn-outline btn-icon" id="btnToggleTheme" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema">
@@ -256,7 +273,7 @@
           </div>
         </div>
 
-        <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr);">
+        <div class="kpi-grid kpi-grid-2">
           <div class="kpi-card">
             <div>
               <div class="kpi-label">Tickets Registrados</div>
@@ -595,6 +612,8 @@
         </div>
       </section>
     </main>
+
+    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Navegación móvil"></nav>
   </div>
 
   <!-- =====================================================================
@@ -723,7 +742,7 @@
           </div>
           <div class="field" id="workerCredentialField">
             <label for="workerCredential" id="workerCredentialLabel">PIN de mostrador (4-6 dígitos) *</label>
-            <input type="password" id="workerCredential" autocomplete="new-password" placeholder="Ej. 1234" />
+            <input type="password" id="workerCredential" autocomplete="new-password" />
           </div>
           <div class="field">
             <label for="workerColor">Color identificativo</label>
@@ -831,8 +850,42 @@
     </div>
   </div>
 
+  <!-- Modal: Conexión Móvil Wi-Fi Local (LAN + QR) -->
+  <div class="modal-backdrop" id="lanModal">
+    <div class="modal" role="dialog" aria-modal="true" style="max-width:480px;">
+      <div class="modal-header">
+        <h2>Conectar Móvil en Red Wi-Fi Local</h2>
+        <button type="button" class="btn btn-outline btn-icon" data-close-modal="lanModal" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="lanServerStatusBox" class="lan-status-box">Comprobando servidor local...</div>
+        <div class="lan-primary-box">
+          <span class="lan-url-meta">URL principal para abrir en iPhone (Safari) o Android (Chrome):</span>
+          <div id="lanPrimaryUrlBox" class="lan-primary-url">—</div>
+        </div>
+        <div id="lanQrContainer" class="lan-qr-wrap">Cargando código QR local...</div>
+        <div id="lanUrlsContainer" class="lan-url-list"></div>
+        <div class="lan-copy-row">
+          <button type="button" class="btn btn-primary" id="btnCopyLanUrl">Copiar Dirección Principal</button>
+          <button type="button" class="btn btn-outline" id="btnRefreshLanInfo">Actualizar IPs</button>
+        </div>
+        <div class="info-box lan-firewall-box" id="lanFirewallHint">
+          <strong>¿No carga desde el móvil?</strong> Asegúrate de que el móvil y este PC estén en el mismo Wi-Fi y permite el puerto TCP en el <strong>Firewall de Windows</strong> (perfil Público/Privado):
+          <div class="lan-fw-cmd-row">
+            <code id="lanFirewallCmd" class="selectable">netsh advfirewall firewall add rule name="Control de Stock POS LAN (TCP 3847)" dir=in action=allow protocol=TCP localport=3847 profile=any</code>
+            <button type="button" class="btn btn-outline btn-sm" id="btnCopyFirewallCmd">Copiar</button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" data-close-modal="lanModal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-wrap" id="toastContainer"></div>
 
+  <script src="js/apiClient.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/xlsx-exporter.js"></script>
   <script src="js/views/login.view.js"></script>

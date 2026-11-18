@@ -60,13 +60,13 @@
     metaEl.textContent = `${worker.employee_code} · ${worker.role === 'admin' ? 'Administrador (Control Total)' : 'Vendedor (Mostrador)'}`;
 
     if (worker.role === 'admin') {
-      labelEl.textContent = 'PIN o contraseña de Administrador';
+      labelEl.textContent = 'Contraseña o PIN';
       inputEl.classList.add('text-mode');
-      inputEl.placeholder = 'Introduce tu clave o PIN';
+      inputEl.placeholder = '';
     } else {
-      labelEl.textContent = 'PIN rápido de mostrador (4-6 dígitos)';
+      labelEl.textContent = 'PIN de acceso';
       inputEl.classList.remove('text-mode');
-      inputEl.placeholder = '••••';
+      inputEl.placeholder = '';
     }
 
     inputEl.disabled = false;

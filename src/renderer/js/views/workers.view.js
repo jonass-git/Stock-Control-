@@ -30,8 +30,8 @@
 
         return `
           <tr>
-            <td><strong>${escapeHtml(w.employee_code)}</strong></td>
-            <td>
+            <td data-label="Código"><strong>${escapeHtml(w.employee_code)}</strong></td>
+            <td data-label="Trabajador">
               <div style="display:flex;align-items:center;gap:10px;">
                 <div class="chip-avatar" style="background:${escapeHtml(w.avatar_color)}">${escapeHtml(getInitials(w.name))}</div>
                 <div>
@@ -39,14 +39,16 @@
                 </div>
               </div>
             </td>
-            <td>${rolePill}</td>
-            <td>
-              <strong>${formatNumber(w.sales_count || 0)}</strong> tickets<br/>
-              <span style="font-size:0.76rem;color:var(--text-muted);">${formatCurrency(w.total_sold || 0)}</span>
+            <td data-label="Rol">${rolePill}</td>
+            <td data-label="Ventas / Facturado">
+              <div>
+                <strong>${formatNumber(w.sales_count || 0)}</strong> tickets<br/>
+                <span style="font-size:0.76rem;color:var(--text-muted);">${formatCurrency(w.total_sold || 0)}</span>
+              </div>
             </td>
-            <td style="font-size:0.82rem;color:var(--text-muted);">${escapeHtml(formatDateTime(w.last_login_at))}</td>
-            <td>${statusBadge}</td>
-            <td>
+            <td data-label="Último Acceso" style="font-size:0.82rem;color:var(--text-muted);">${escapeHtml(formatDateTime(w.last_login_at))}</td>
+            <td data-label="Estado">${statusBadge}</td>
+            <td data-label="Acciones">
               <div class="row-actions">
                 <button type="button" class="btn btn-outline btn-sm" data-worker-action="edit" data-id="${w.id}">Editar</button>
                 <button type="button" class="btn btn-outline btn-sm" data-worker-action="reset-cred" data-id="${w.id}">PIN / Clave</button>
@@ -72,11 +74,11 @@
     const label = document.getElementById('workerCredentialLabel');
     const input = document.getElementById('workerCredential');
     if (role === 'admin') {
-      label.textContent = 'PIN o contraseña de Administrador (mín. 4 caracteres) *';
-      input.placeholder = 'Ej. Admin2026 o 1234';
+      label.textContent = 'Contraseña o PIN de Administrador (mín. 4 caracteres) *';
+      input.placeholder = '';
     } else {
-      label.textContent = 'PIN numérico de mostrador (4-6 dígitos) *';
-      input.placeholder = 'Ej. 4589';
+      label.textContent = 'PIN de acceso (4-6 dígitos) *';
+      input.placeholder = '';
     }
   }
 

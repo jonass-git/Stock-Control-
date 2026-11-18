@@ -187,6 +187,17 @@
     openModal('receiptModal');
   }
 
+  function debounce(fn, wait = 120) {
+    let timer = null;
+    return function debounced(...args) {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        fn.apply(this, args);
+      }, wait);
+    };
+  }
+
   POSApp.utils = {
     formatCurrency,
     formatNumber,
@@ -202,6 +213,7 @@
     initModalClosers,
     confirmDialog,
     initConfirmDialog,
-    showReceiptModal
+    showReceiptModal,
+    debounce
   };
 })(window);

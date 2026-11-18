@@ -99,7 +99,7 @@
         const total = Number(p.stock) * Number(p.price);
         return `
           <tr>
-            <td>
+            <td data-label="Producto">
               <div class="prod-title">${escapeHtml(p.name)}</div>
               <div class="prod-meta">
                 ${p.sku ? `<span>SKU: <strong>${escapeHtml(p.sku)}</strong></span>` : ''}
@@ -107,18 +107,18 @@
                 ${p.notes ? `<span>• ${escapeHtml(p.notes)}</span>` : ''}
               </div>
             </td>
-            <td><span class="cat-tag">${escapeHtml(p.category || 'General')}</span></td>
-            <td><strong>${formatCurrency(p.price)}</strong></td>
-            <td>
+            <td data-label="Categoría"><span class="cat-tag">${escapeHtml(p.category || 'General')}</span></td>
+            <td data-label="Precio Unit."><strong>${formatCurrency(p.price)}</strong></td>
+            <td data-label="Stock Actual">
               <div class="stepper">
                 <button type="button" class="step-btn minus" data-inv-action="step-minus" data-id="${p.id}" title="Restar 1 unidad">−</button>
                 <span class="step-val" data-inv-action="open-adjust" data-id="${p.id}" title="Clic para ajuste exacto con motivo">${formatNumber(p.stock)}</span>
                 <button type="button" class="step-btn plus" data-inv-action="step-plus" data-id="${p.id}" title="Sumar 1 unidad">+</button>
               </div>
             </td>
-            <td><strong>${formatCurrency(total)}</strong></td>
-            <td><span class="badge ${st.cls}">${st.label}</span></td>
-            <td>
+            <td data-label="Valor Total"><strong>${formatCurrency(total)}</strong></td>
+            <td data-label="Estado"><span class="badge ${st.cls}">${st.label}</span></td>
+            <td data-label="Acciones">
               <div class="row-actions">
                 <button type="button" class="btn btn-outline btn-sm" data-inv-action="edit" data-id="${p.id}">Editar</button>
                 <button type="button" class="btn btn-danger-soft btn-sm" data-inv-action="delete" data-id="${p.id}">Eliminar</button>
@@ -264,7 +264,7 @@
     document.getElementById('kpiCardProducts').addEventListener('click', () => setStatusFilter('all'));
     document.getElementById('kpiCardAlerts').addEventListener('click', () => setStatusFilter('alerts'));
 
-    document.getElementById('invSearchInput').addEventListener('input', renderInventory);
+    document.getElementById('invSearchInput').addEventListener('input', POSApp.utils.debounce(renderInventory, 120));
     document.getElementById('invCategoryFilter').addEventListener('change', renderInventory);
     document.getElementById('invSortSelect').addEventListener('change', renderInventory);
 

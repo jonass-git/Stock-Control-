@@ -142,7 +142,11 @@ async function restoreDatabaseBackup(mainWindow, sessionManager) {
 
   fs.copyFileSync(selectedPath, activeDbPath);
   reopenDatabase(activeDbPath);
-  sessionManager.clearSession();
+  if (typeof sessionManager.clearAllSessions === 'function') {
+    sessionManager.clearAllSessions();
+  } else {
+    sessionManager.clearSession();
+  }
 
   return {
     canceled: false,

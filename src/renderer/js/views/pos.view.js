@@ -313,17 +313,19 @@
         const st = getStockStatus(p);
         return `
           <tr>
-            <td>
-              <div class="prod-title">${escapeHtml(p.name)}</div>
-              <div class="prod-meta">
-                ${p.sku ? `<span>SKU: <strong>${escapeHtml(p.sku)}</strong></span>` : ''}
-                ${p.notes ? `<span>• ${escapeHtml(p.notes)}</span>` : ''}
+            <td data-label="Producto">
+              <div>
+                <div class="prod-title">${escapeHtml(p.name)}</div>
+                <div class="prod-meta">
+                  ${p.sku ? `<span>SKU: <strong>${escapeHtml(p.sku)}</strong></span>` : ''}
+                  ${p.notes ? `<span>• ${escapeHtml(p.notes)}</span>` : ''}
+                </div>
               </div>
             </td>
-            <td><span class="cat-tag">${escapeHtml(p.category || 'General')}</span></td>
-            <td><strong>${formatCurrency(p.price)}</strong></td>
-            <td><strong>${formatNumber(p.stock)}</strong> uds.</td>
-            <td><span class="badge ${st.cls}">${st.label}</span></td>
+            <td data-label="Categoría"><span class="cat-tag">${escapeHtml(p.category || 'General')}</span></td>
+            <td data-label="Precio Unit."><strong>${formatCurrency(p.price)}</strong></td>
+            <td data-label="Stock"><span><strong>${formatNumber(p.stock)}</strong> uds.</span></td>
+            <td data-label="Estado"><span class="badge ${st.cls}">${st.label}</span></td>
           </tr>
         `;
       })
@@ -353,13 +355,13 @@
           : '<span class="badge badge-ok">Completada</span>';
         return `
           <tr>
-            <td><strong>${escapeHtml(s.ticket_number)}</strong></td>
-            <td>${escapeHtml(formatDateTime(s.created_at))}</td>
-            <td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(summary)}">${escapeHtml(summary)}</td>
-            <td>${escapeHtml(paymentLabel(s.payment_method))}</td>
-            <td><strong>${formatCurrency(s.total_amount)}</strong></td>
-            <td>${statusBadge}</td>
-            <td style="text-align:right;">
+            <td data-label="Ticket"><strong>${escapeHtml(s.ticket_number)}</strong></td>
+            <td data-label="Fecha / Hora">${escapeHtml(formatDateTime(s.created_at))}</td>
+            <td data-label="Artículos" class="td-truncate" title="${escapeHtml(summary)}">${escapeHtml(summary)}</td>
+            <td data-label="Pago">${escapeHtml(paymentLabel(s.payment_method))}</td>
+            <td data-label="Total"><strong>${formatCurrency(s.total_amount)}</strong></td>
+            <td data-label="Estado">${statusBadge}</td>
+            <td data-label="Detalle" style="text-align:right;">
               <button type="button" class="btn btn-outline btn-sm" data-shift-receipt="${s.id}">Ver Ticket</button>
             </td>
           </tr>
@@ -379,7 +381,8 @@
 
   function init() {
     const searchInput = document.getElementById('posSearchInput');
-    searchInput.addEventListener('input', renderPosCatalog);
+    const debouncedPosRender = POSApp.utils.debounce(renderPosCatalog, 120);
+    searchInput.addEventListener('input', debouncedPosRender);
     searchInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -446,7 +449,7 @@
       updateChangeDisplay();
     });
 
-    document.getElementById('roSearchInput').addEventListener('input', renderReadonlyCatalog);
+    document.getElementById('roSearchInput').addEventListener('input', POSApp.utils.debounce(renderReadonlyCatalog, 120));
     document.getElementById('roCategoryFilter').addEventListener('change', renderReadonlyCatalog);
 
     document.getElementById('myShiftSalesBody').addEventListener('click', (e) => {

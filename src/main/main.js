@@ -2,9 +2,11 @@ const path = require('node:path');
 const { app, BrowserWindow, ipcMain, Menu, session } = require('electron');
 const { initDatabase, getDb, closeDatabase } = require('./db/connection');
 const { registerIpcHandlers } = require('./ipc');
+const { startLanServer } = require('./lan-server');
 const backupService = require('./backup');
 
 let mainWindow = null;
+let lanServerHandle = null;
 
 function setupOfflineNetworkLock() {
   const defaultSession = session.defaultSession;
@@ -16,13 +18,11 @@ function setupOfflineNetworkLock() {
       url.startsWith('file://') ||
       url.startsWith('data:') ||
       url.startsWith('blob:') ||
-      url.startsWith('devtools://');
+      url.startsWith('devtools://') ||
+      url.startsWith('http://127.0.0.1:') ||
+      url.startsWith('http://localhost:');
 
-    if (isLocal) {
-      callback({ cancel: false });
-    } else {
-      callback({ cancel: true });
-    }
+    callback({ cancel: !isLocal });
   });
 }
 
@@ -30,8 +30,8 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1360,
     height: 860,
-    minWidth: 1024,
-    minHeight: 700,
+    minWidth: 360,
+    minHeight: 620,
     title: 'Control de Stock & POS — Mostrador Offline',
     backgroundColor: '#f4f6fb',
     webPreferences: {
@@ -76,16 +76,41 @@ if (!gotSingleInstanceLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
     setupOfflineNetworkLock();
     initDatabase();
 
-    registerIpcHandlers(ipcMain, {
+    let lanRef = null;
+    let lanError = null;
+    const handlers = registerIpcHandlers(ipcMain, {
       getDb,
       getMainWindow: () => mainWindow,
-      backupService
+      backupService,
+      getLanInfo: () =>
+        lanRef
+          ? lanRef.getLanInfo()
+          : {
+              status: 'error',
+              error: lanError || 'Servidor LAN no iniciado',
+              host: '0.0.0.0',
+              port: 3847,
+              ips: [],
+              urls: [],
+              interfaces: [],
+              primaryUrl: '',
+              qrSvg: ''
+            }
     });
+
+    try {
+      const requestedPort = process.env.POS_SMOKE_TEST === '1' ? 0 : 3847;
+      lanRef = await startLanServer({ handlers, getDb, port: requestedPort, host: '0.0.0.0' });
+      lanServerHandle = lanRef;
+    } catch (err) {
+      lanError = err && err.message ? err.message : 'No se pudo iniciar el servidor LAN local.';
+      console.error('No se pudo iniciar el servidor LAN local:', lanError);
+    }
 
     createMainWindow();
 
@@ -102,17 +127,100 @@ if (!gotSingleInstanceLock) {
       mainWindow.webContents.once('did-finish-load', () => {
         setTimeout(async () => {
           try {
+            const checkViewport = async (w, h) => {
+              mainWindow.setContentSize(w, h);
+              await new Promise((r) => setTimeout(r, 120));
+              return mainWindow.webContents.executeJavaScript(`
+                (() => ({
+                  width: window.innerWidth,
+                  clientWidth: document.documentElement.clientWidth,
+                  scrollWidth: document.documentElement.scrollWidth,
+                  overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth
+                }))()
+              `);
+            };
+
             const domState = await mainWindow.webContents.executeJavaScript(`
-              (() => ({
-                title: document.title,
-                hasPosAPI: typeof window.posAPI === 'object',
-                workerCards: document.querySelectorAll('#loginWorkersGrid .worker-card').length,
-                loginVisible: !document.getElementById('loginScreen').classList.contains('hidden')
-              }))()
+              (() => {
+                const loginEl = document.getElementById('loginScreen');
+                const loginText = loginEl ? loginEl.innerText : '';
+                const docStyle = getComputedStyle(document.documentElement);
+                const bodyStyle = getComputedStyle(document.body);
+                return {
+                  title: document.title,
+                  hasApiClient: typeof window.apiClient === 'object',
+                  hasPosAPI: typeof window.posAPI === 'object',
+                  workerCards: document.querySelectorAll('#loginWorkersGrid .worker-card').length,
+                  loginVisible: !loginEl.classList.contains('hidden'),
+                  loginHintRemoved: !document.getElementById('loginDefaultHint'),
+                  hasDefaultPinText: /\\b1234\\b|\\b0000\\b/i.test(loginText),
+                  rootOverflowHidden: docStyle.overflow === 'hidden' && bodyStyle.overflow === 'hidden'
+                };
+              })()
             `);
-            console.log('SMOKE_DOM_STATE:', JSON.stringify(domState));
-            if (!domState.hasPosAPI || domState.workerCards < 2 || !domState.loginVisible || smokeErrors.length > 0) {
-              console.error('SMOKE_ERRORS:', JSON.stringify(smokeErrors));
+
+            // Verificar login como Admin y comprobar vista en 1280px, 412px (Android) y 375px (iPhone)
+            await mainWindow.webContents.executeJavaScript(`
+              (async () => {
+                document.getElementById('loginCredentialInput').value = '1234';
+                document.getElementById('loginForm').dispatchEvent(new Event('submit', { cancelable: true }));
+              })()
+            `);
+            await new Promise((r) => setTimeout(r, 400));
+
+            const vp1280 = await checkViewport(1280, 800);
+            const vp412 = await checkViewport(412, 820);
+            const vp375 = await checkViewport(375, 760);
+
+            const navState = await mainWindow.webContents.executeJavaScript(`
+              (() => {
+                const shell = document.getElementById('appShell');
+                const main = document.querySelector('main.container');
+                const topbar = document.querySelector('.topbar');
+                return {
+                  appShellVisible: !shell.classList.contains('hidden'),
+                  appShellDisplay: getComputedStyle(shell).display,
+                  mainOverflowY: getComputedStyle(main).overflowY,
+                  topbarTop: Math.round(topbar.getBoundingClientRect().top),
+                  mobileNavDisplay: getComputedStyle(document.getElementById('mobileBottomNav')).display,
+                  desktopNavDisplay: getComputedStyle(document.getElementById('mainNavTabs')).display,
+                  inventoryRows: document.querySelectorAll('#inventoryTableBody tr').length
+                };
+              })()
+            `);
+
+            mainWindow.setSize(1280, 800);
+            await new Promise((r) => setTimeout(r, 180));
+            const desktopInvState = await mainWindow.webContents.executeJavaScript(`
+              (() => {
+                const invBtn = document.querySelector('#mainNavTabs [data-view="inventory"]');
+                if (invBtn) invBtn.click();
+                const main = document.querySelector('main.container');
+                const wrap = document.querySelector('#invTableCard .table-wrap');
+                const card = document.getElementById('invTableCard');
+                const posGrid = document.getElementById('posProductsGrid');
+                return {
+                  desktopMainOverflowY: main ? getComputedStyle(main).overflowY : '',
+                  invTableWrapOverflowY: wrap ? getComputedStyle(wrap).overflowY : '',
+                  invTableCardHeight: card ? Math.round(card.getBoundingClientRect().height) : 0,
+                  desktopPosGridOverflowY: posGrid ? getComputedStyle(posGrid).overflowY : ''
+                };
+              })()
+            `);
+
+            console.log('SMOKE_DOM_STATE:', JSON.stringify({ domState, navState, desktopInvState, vp1280, vp412, vp375 }));
+            const hasOverflow = vp1280.overflowX || vp412.overflowX || vp375.overflowX;
+            const layoutBad =
+              !domState.rootOverflowHidden ||
+              navState.appShellDisplay !== 'flex' ||
+              navState.mainOverflowY !== 'auto' ||
+              navState.topbarTop !== 0 ||
+              desktopInvState.desktopMainOverflowY !== 'hidden' ||
+              desktopInvState.invTableWrapOverflowY !== 'auto' ||
+              desktopInvState.desktopPosGridOverflowY !== 'auto';
+            const loginBad = !domState.loginHintRemoved || domState.hasDefaultPinText;
+            if (!domState.hasApiClient || !domState.hasPosAPI || domState.workerCards < 2 || !navState.appShellVisible || hasOverflow || layoutBad || loginBad || smokeErrors.length > 0) {
+              console.error('SMOKE_ERRORS:', JSON.stringify({ smokeErrors, hasOverflow, layoutBad, loginBad }));
               app.exit(1);
               return;
             }
@@ -132,14 +240,26 @@ if (!gotSingleInstanceLock) {
     });
   });
 
-  app.on('window-all-closed', () => {
+  async function shutdownServices() {
+    if (lanServerHandle) {
+      try {
+        await lanServerHandle.close();
+      } catch {
+        // Ignorar
+      }
+      lanServerHandle = null;
+    }
     closeDatabase();
+  }
+
+  app.on('window-all-closed', async () => {
+    await shutdownServices();
     if (process.platform !== 'darwin') {
       app.quit();
     }
   });
 
-  app.on('before-quit', () => {
-    closeDatabase();
+  app.on('before-quit', async () => {
+    await shutdownServices();
   });
 }

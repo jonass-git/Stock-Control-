@@ -2,6 +2,12 @@ appId: com.controlstock.pos.offline
 productName: Control de Stock POS
 copyright: Copyright © 2026 Control Stock POS
 npmRebuild: false
+compression: maximum
+electronLanguages:
+  - es
+  - es-419
+  - en-US
+afterPack: "./scripts/after-pack.js"
 directories:
   output: dist
 files:
@@ -9,6 +15,14 @@ files:
   - package.json
   - "!Control_de_Stock.html"
   - "!tests/**"
+  - "!scripts/**"
+  - "!**/*.map"
+  - "!**/*.md"
+  - "!node_modules/better-sqlite3/deps/**"
+  - "!node_modules/better-sqlite3/src/**"
+  - "!node_modules/better-sqlite3/build/Release/obj/**"
+  - "!node_modules/**/test/**"
+  - "!node_modules/**/tests/**"
 win:
   target:
     - target: portable

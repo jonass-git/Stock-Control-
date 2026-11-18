@@ -10,7 +10,12 @@ async function invokeClean(channel, ...args) {
   return res.data;
 }
 
-contextBridge.exposeInMainWorld('posAPI', {
+const bridge = {
+  isDesktop: true,
+
+  // Red local Wi-Fi (LAN)
+  getLanInfo: () => invokeClean('lan:get-info'),
+
   // Autenticación y Turno
   getActiveWorkers: () => invokeClean('auth:get-workers'),
   login: (workerId, credential) => invokeClean('auth:login', { workerId, credential }),
@@ -51,4 +56,6 @@ contextBridge.exposeInMainWorld('posAPI', {
   exportDatabaseBackup: () => invokeClean('backup:export-db'),
   restoreDatabaseBackup: () => invokeClean('backup:restore-db'),
   saveFile: (payload) => invokeClean('backup:save-file', payload)
-});
+};
+
+contextBridge.exposeInMainWorld('electronBridge', bridge);
